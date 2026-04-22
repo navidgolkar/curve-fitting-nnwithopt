@@ -23,7 +23,8 @@ def _snapshot_weights(model: nn.Module) -> list[np.ndarray]:
 def train_model(
     model:      nn.Module,
     x:          torch.Tensor,
-    y:          torch.Tensor
+    y:          torch.Tensor,
+    y_r:        torch.Tensor
 ) -> tuple:
     """
     Train *model* using all hyperparameters stored in ``model.params``.
@@ -63,6 +64,7 @@ def train_model(
     device = params.device
     x = x.to(device)
     y = y.to(device)
+    y_r = y_r.to(device)
     apply_seed(params.seed) # Re-seed before training so repeated calls are reproducible
     
     optimizer = params.optimizer_function(model.parameters(), lr=params.learning_rate)
@@ -85,17 +87,19 @@ def train_model(
         model.train()
         if params.shuffle:
             perm = torch.randperm(n_samples, device=device)
-            x_ep = x[perm]
-            y_ep = y[perm]
+            x_ep  = x[perm]
+            y_ep  = y[perm]
+            yr_ep = y_r[perm]
         else:
-            x_ep = x
-            y_ep = y
+            x_ep  = x
+            y_ep  = y
+            yr_ep = y_r
         
         optimizer.zero_grad()
         
         pred = model(x_ep)
         loss_val = loss_fn(pred, y_ep)
-        loss2_val = loss_fn2(pred, y_ep)
+        loss2_val = loss_fn2(pred, yr_ep)
         loss_val.backward()
         
         if params.gradient_clip is not None:

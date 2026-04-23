@@ -40,10 +40,10 @@ if __name__ == "__main__":
     parser.add_argument("--grad_clip", required=False, type=float, default=100.0,
                         help="Enter the value at which the gradient should be clipped to prevent explosion"
                              " (negative value means not to consider this functionality) [type=float, default=100]")
-    parser.add_argument("--tol", required=False, type=float, default=-1,
+    parser.add_argument("--tol", required=False, type=float, default=-1e-3,
                         help="Enter the tolerance for the network at which to stop training"
-                             " (negative value means not to consider this functionality) [type=float, default=-1]")
-    parser.add_argument("--epoch", required=False, type=int, default=1000,
+                             " (negative value means not to consider this functionality) [type=float, default=1e-3]")
+    parser.add_argument("--epoch", required=False, type=int, default=5000,
                         help="Number of epochs to run [type=int, default=1000]")
     parser.add_argument("--shuffle", required=False, action="store_true",
                         help="Will shuffle input data of models [action='store_true']")
@@ -116,31 +116,28 @@ if __name__ == "__main__":
     yr_t = torch.tensor(y).unsqueeze(1)  # (INPUT_N, 1)
     
     os.makedirs(SAVE, exist_ok=True)
-    SAVE = os.path.join(SAVE, FUNC.__class__.__name__)
-    params = ModelParams(name="", layer_sizes=[1] + [N_N] * H_N + [1], activation_functions=[FUNC] * H_N,
-        optimizer_function=OPTIMIZER, learning_rate=LR, max_epoch=EPOCHS, print_each=LOG_EVERY, gradient_clip=GRAD_CLIP,
-        seed=SEED, shuffle=SHUFFLE, loss_function=LOSS1, loss_function2=LOSS2, device=DEVICE, verbose=VERBOSE, )
     results = []
     
     # ======================================================================= #
     # CustomNet                                                               #
     # ======================================================================= #
+    params = ModelParams(name=f"CustomNet{NAME}", layer_sizes=[1] + [N_N] * H_N + [1], activation_functions=[FUNC] * H_N,
+        optimizer_function=OPTIMIZER, learning_rate=LR, max_epoch=EPOCHS, print_each=LOG_EVERY, gradient_clip=GRAD_CLIP,
+        seed=SEED, shuffle=SHUFFLE, loss_function=LOSS1, loss_function2=LOSS2, device=DEVICE, verbose=VERBOSE, )
+    
     nodes = []
     layer_sizes = [1] + [N_N] * H_N + [1]  # [1, 3, 3, 1]
     
     for src_layer in range(H_N + 1):
         src_size = layer_sizes[src_layer]
         tgt_layer = src_layer + 1
-        if src_layer == 0 or src_layer == H_N:
-            for src_node in range(layer_sizes[src_layer]):
-                nodes.extend([src_layer, src_node, tgt_layer, tgt_node] for tgt_node in range(layer_sizes[tgt_layer]))
-        else:
-            for src_node in range(layer_sizes[src_layer]):
-                target_nodes = [(src_node + 1) % N_N, (src_node + N_N // 2) % N_N]
-                nodes.extend([src_layer, src_node, tgt_layer, tgt_node] for tgt_node in target_nodes)
-            if src_layer == 1 and len(layer_sizes) > 4:
-                nodes.extend([src_layer, src_node, H_N, src_node] for src_node in range(layer_sizes[src_layer]))
-    model = CustomNet(replace(params, name=f"CustomNet{NAME}"), nodes)
+        for src_node in range(layer_sizes[src_layer]):
+            nodes.extend([src_layer, src_node, tgt_layer, tgt_node] for tgt_node in range(layer_sizes[tgt_layer]))
+        if 0 < src_layer < H_N:
+            for tgt_layer in range(src_layer + 2, H_N + 1):
+                nodes.extend([src_layer, src_node, tgt_layer, src_node] for src_node in range(layer_sizes[src_layer]))
+            
+    model = CustomNet(params, nodes)
     results.append((model, *train_model(model, x_t, y_t, yr_t)))
     
     figs = []

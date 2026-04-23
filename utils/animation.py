@@ -256,7 +256,7 @@ def make_animation(
     edge_lines = [line for line, *_ in edge_artists]
     
     # Loss panels
-    for ax, hist, color, name in ((ax_loss,  loss_history,  loss_color,  type(p.loss_function).__name__), (ax_loss2, loss2_history, loss2_color, type(p.loss_function2).__name__)):
+    for ax, hist, color, name in ((ax_loss,  loss_history,  loss_color,  type(p.loss_function).__name__+" with noisy y values (used for training)"), (ax_loss2, loss2_history, loss2_color, type(p.loss_function2).__name__+" with noiseless y values")):
         ax.set_xlim(1, epoch_vals[-1])
         ax.set_ylim(max(min(hist) / 1.05, 1e-10), max(hist) * 1.05)
         ax.set_yscale("log")

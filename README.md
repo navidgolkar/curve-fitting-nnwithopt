@@ -1,6 +1,8 @@
 # Neural Networks for curve fitting + meta-heuristic algorithm for structure optimization
 This repository is based on a previously done project: https://github.com/navidgolkar/curve-fitting-nn. 
-So the base parameters are like this repository and for avoiding bulky explanation, just the added aspects are explained here.
+So the base parameters are like this repository and for avoiding bulky explanation, just the added aspects are explained here:
+- --tol default value is changed to 1e-3
+- --epoch default value is changed to 5000
 
 In this repository we use Grey Wolf Optimization (GWO) algorithm as a meta-heuristic approach for optimization of our CustomNet structure.
 The algorithm prunes the edges in order to reach an optimum structure.

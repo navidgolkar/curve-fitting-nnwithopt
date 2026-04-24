@@ -12,3 +12,8 @@ to use you can clone this repository and install the packages needed in requirem
 
 #### The input data formula: $2e^{-x}(\sin(5x)+x\cos(5x))$
 ___
+
+## To-do:
+- make GWO_parameters.py for defining hyper parameters of optimizer
+- implement the seed for optimizer in GWO_parameters.py as well
+- implement computing edge importance, applying mask, and gwo_run loop

@@ -304,22 +304,26 @@ class CustomNet(nn.Module):
             else:
                 skip_pairs.add((src_layer, tgt_layer))
         
-        # _connections[i]: (sizes[i+1] × sizes[i]) bool, from adjacent_active
-        params._connections = []
-        for i in range(self.n_layers - 1):
-            conn = np.zeros((self.layer_sizes[i + 1], self.layer_sizes[i]), dtype=bool)
-            for (tgt_n, src_n) in adjacent_active.get(i, set()):
-                conn[tgt_n, src_n] = True
-            params._connections.append(conn)
+        # The full dense graph is created first; edges absent from nodes are
+        # then pruned so their weights are zeroed and kept at zero by
+        # _apply_masks on every forward pass.
+        self._linears = nn.ModuleList([nn.Linear(self.layer_sizes[i], self.layer_sizes[i + 1], bias=True) for i in range(self.n_layers - 1)])
         
-        # Adjacent masks & linears --------------------------------------------
+        # _connections: start all-True (full dense), then mark inactive False
+        params._connections = [_full_connections(self.layer_sizes[i + 1], self.layer_sizes[i]) for i in range(self.n_layers - 1)]
+        for i in range(self.n_layers - 1):
+            active_set = adjacent_active.get(i, set())
+            for tgt_n in range(self.layer_sizes[i + 1]):
+                for src_n in range(self.layer_sizes[i]):
+                    if (tgt_n, src_n) not in active_set:
+                        params._connections[i][tgt_n, src_n] = False
+        
+        # Active masks derived from _connections (registered as buffers)
         self._active_mask: list[torch.Tensor] = []
         for i in range(self.n_layers - 1):
             mask = torch.from_numpy(params._connections[i].copy())
             self.register_buffer(f"_mask_{i}", mask)
             self._active_mask.append(getattr(self, f"_mask_{i}"))
-            
-        self._linears = nn.ModuleList([nn.Linear(self.layer_sizes[i], self.layer_sizes[i + 1], bias=True) for i in range(self.n_layers - 1)])
         
         # Skip maps -----------------------------------------------------------
         self._skip_targets: list[list[int]] = [[] for _ in range(self.n_layers)]
@@ -336,8 +340,10 @@ class CustomNet(nn.Module):
         self._funcs = nn.ModuleList([copy.deepcopy(f) for f in funcs] + [nn.Identity()])
         
         # Pruning -------------------------------------------------------------
+        # Zero all inactive adjacent edges immediately
         self._pruned: set[tuple[int, int, int, int]] = set()
         self._apply_masks()
+        # Apply any edges pre-declared pruned in params
         for edge in params._pruned:
             self.add_pruned(*edge)
         
@@ -357,7 +363,7 @@ class CustomNet(nn.Module):
     
     def add_pruned(self, src_layer: int, src_node: int, tgt_layer: int, tgt_node: int) -> None:
         """Mark an edge as pruned, updating weights, masks, and _connections."""
-        self.check_connection(self, src_layer, src_node, tgt_layer, tgt_node)
+        self.check_connection(src_layer, src_node, tgt_layer, tgt_node)
         edge = (src_layer, src_node, tgt_layer, tgt_node)
         self._pruned.add(edge)
         self.params._pruned.add(edge)
@@ -405,7 +411,8 @@ class CustomNet(nn.Module):
         layer_input = x
         for L in range(self.n_layers-1):
             outputs.append(self._funcs[L](self._linears[L](layer_input)))
+            # calculating input of next layer which is the output of current(L) layer
             layer_input = outputs[-1]
             for src_l in self._skip_sources[L+1]:
-                layer_input = layer_input + outputs[src_l]
+                layer_input = layer_input + outputs[src_l-1]
         return outputs[-1]

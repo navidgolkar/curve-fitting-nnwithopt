@@ -225,7 +225,6 @@ def apply_seed(seed: int | None) -> None:
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark     = False
 
-
 # -----------------------------------------------------------------------------
 # Parameter validation
 # -----------------------------------------------------------------------------

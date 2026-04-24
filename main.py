@@ -9,11 +9,10 @@ from utils.parameters import ModelParams, apply_seed, FUNC_DICT, LOSS_FUNC_DICT,
 from utils.models import FCNN, CNN, DenseResNet, ConvResNet, CustomNet
 from utils.animation import make_animation
 from utils.train import train_model
-
+import optimizer.GWO as gwo
 
 def test_func(x):
     return 2 * np.exp(-x) * (np.sin(5 * x) + x * np.cos(5 * x))
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -133,9 +132,9 @@ if __name__ == "__main__":
         tgt_layer = src_layer + 1
         for src_node in range(layer_sizes[src_layer]):
             nodes.extend([src_layer, src_node, tgt_layer, tgt_node] for tgt_node in range(layer_sizes[tgt_layer]))
-        if 0 < src_layer < H_N:
-            for tgt_layer in range(src_layer + 2, H_N + 1):
-                nodes.extend([src_layer, src_node, tgt_layer, src_node] for src_node in range(layer_sizes[src_layer]))
+        # if 0 < src_layer < H_N:
+        #     for tgt_layer in range(src_layer + 2, H_N + 1):
+        #         nodes.extend([src_layer, src_node, tgt_layer, src_node] for src_node in range(layer_sizes[src_layer]))
             
     model = CustomNet(params, nodes)
     results.append((model, *train_model(model, x_t, y_t, yr_t)))

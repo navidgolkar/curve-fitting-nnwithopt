@@ -121,15 +121,5 @@ def train_model(
             if params.verbose:
                 loss2_name = type(loss_fn2).__name__
                 print(f"Epoch {epoch:>6d} | {type(loss_fn).__name__}: {loss_v:.6f} | {loss2_name}: {loss2_v:.4f}")
-        
-        # Early stopping ------------------------------------------------------
-        if params.tol is not None and loss_v < params.tol:
-            if params.verbose:
-                print(f"Early stop at epoch {epoch} (loss {loss_v:.6e} < tol {params.tol:.6e})")
-            if not log_this:
-                with torch.no_grad():
-                    y_pred = model(x).squeeze().cpu().numpy()
-                snapshots.append((epoch, loss_v, loss2_v, y_pred.copy(), _snapshot_weights(model)))
-            break
             
     return snapshots, loss_history, loss2_history

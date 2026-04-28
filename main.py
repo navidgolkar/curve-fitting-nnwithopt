@@ -5,14 +5,25 @@ import os
 from dataclasses import replace
 import argparse
 
+from numpy.ma.core import argmin, argsort
+
 from utils.parameters import ModelParams, apply_seed, FUNC_DICT, LOSS_FUNC_DICT, OPT_DICT
-from utils.models import FCNN, CNN, DenseResNet, ConvResNet, CustomNet
+from utils.models import CustomNet
 from utils.animation import make_animation
 from utils.train import train_model
-import optimizer.GWO as gwo
+
+from optimizer.helpers import compute_edge_importance, apply_mask_to_model
+import optimizer.Optimizers as gwo
 
 def test_func(x):
     return 2 * np.exp(-x) * (np.sin(5 * x) + x * np.cos(5 * x))
+
+def min_pruning_mask(importance: np.ndarray, idx: int=0) -> np.ndarray:
+    mask_to_prune = np.ones_like(importance)
+    i = argsort(importance)
+    j = i[idx]
+    mask_to_prune[j] = 0
+    return mask_to_prune
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -39,11 +50,11 @@ if __name__ == "__main__":
     parser.add_argument("--grad_clip", required=False, type=float, default=100.0,
                         help="Enter the value at which the gradient should be clipped to prevent explosion"
                              " (negative value means not to consider this functionality) [type=float, default=100]")
-    parser.add_argument("--tol", required=False, type=float, default=-1e-3,
+    parser.add_argument("--tol", required=False, type=float, default=-1,
                         help="Enter the tolerance for the network at which to stop training"
-                             " (negative value means not to consider this functionality) [type=float, default=1e-3]")
+                             " (negative value means not to consider this functionality) [type=float, default=-1]")
     parser.add_argument("--epoch", required=False, type=int, default=5000,
-                        help="Number of epochs to run [type=int, default=1000]")
+                        help="Number of epochs to run [type=int, default=5000]")
     parser.add_argument("--shuffle", required=False, action="store_true",
                         help="Will shuffle input data of models [action='store_true']")
     parser.add_argument("--device", required=False, type=str, default="cpu",
@@ -92,7 +103,7 @@ if __name__ == "__main__":
     SHUFFLE = args.shuffle
     DEVICE = args.device
     VERBOSE = args.verbose
-    NAME = f"_{args.name}" if args.name != "" else ""
+    NAME = f"CustomNet_{args.name}" if args.name != "" else "CustomNet"
     
     INPUT_N = args.in_n
     NOISE_STD = args.in_std
@@ -120,12 +131,24 @@ if __name__ == "__main__":
     # ======================================================================= #
     # CustomNet                                                               #
     # ======================================================================= #
-    params = ModelParams(name=f"CustomNet{NAME}", layer_sizes=[1] + [N_N] * H_N + [1], activation_functions=[FUNC] * H_N,
-        optimizer_function=OPTIMIZER, learning_rate=LR, max_epoch=EPOCHS, print_each=LOG_EVERY, gradient_clip=GRAD_CLIP,
-        seed=SEED, shuffle=SHUFFLE, loss_function=LOSS1, loss_function2=LOSS2, device=DEVICE, verbose=VERBOSE, )
+    params = ModelParams(
+        name="",
+        layer_sizes=[1] + [N_N] * H_N + [1],
+        activation_functions=[FUNC] * H_N,
+        optimizer_function=OPTIMIZER,
+        learning_rate=LR,
+        max_epoch=EPOCHS,
+        print_each=LOG_EVERY,
+        gradient_clip=GRAD_CLIP,
+        seed=SEED,
+        shuffle=SHUFFLE,
+        loss_function=LOSS1,
+        loss_function2=LOSS2,
+        device=DEVICE,
+        verbose=VERBOSE)
     
     nodes = []
-    layer_sizes = [1] + [N_N] * H_N + [1]  # [1, 3, 3, 1]
+    layer_sizes = [1] + [N_N] * H_N + [1]  # [1, 3, 3, 3, 1]
     
     for src_layer in range(H_N + 1):
         src_size = layer_sizes[src_layer]
@@ -135,20 +158,35 @@ if __name__ == "__main__":
         # if 0 < src_layer < H_N:
         #     for tgt_layer in range(src_layer + 2, H_N + 1):
         #         nodes.extend([src_layer, src_node, tgt_layer, src_node] for src_node in range(layer_sizes[src_layer]))
-            
-    model = CustomNet(params, nodes)
-    results.append((model, *train_model(model, x_t, y_t, yr_t)))
-    
-    figs = []
+        
+    nums = [layer_sizes[i]*layer_sizes[i+1] for i in range(len(layer_sizes)-1)]
+    model = CustomNet(replace(params, name=f"{NAME}"), nodes)
+    min_losses = []
+    for i in range(1, sum(nums)-H_N):
+        snaps, loss, loss2 = train_model(model, x_t, y_t, yr_t)
+        min_losses.append(min(loss))
+        
+        # Early stopping?
+        if len(min_losses) > 1 and min_losses[-1] > min_losses[-2]:
+            break
+        
+        imp, edge = compute_edge_importance(model)
+        new_model = None
+        for ord in range(len(imp)):
+            mask = min_pruning_mask(imp, ord)
+            new_model = apply_mask_to_model(model, mask, edge)
+            if new_model != None:
+                continue
+        if new_model == None:
+            break
+        model = new_model
+        model.params.name = f"MinWeight_Pruned_i={i}"
     
     # Animate & save
-    for model, snaps, loss, loss2 in results:
-        figs.append(
-            make_animation(model=model, snapshots=snaps, loss_history=loss, loss2_history=loss2, x_np=x_np, y_np=y_np,
-                pred_color=PRED_COLOR, loss_color=LOSS_COLOR, loss2_color=LOSS2_COLOR, file_type=FILE_TYPE,
-                savepath=SAVE, ))
+    fig, _ = make_animation(model=model, snapshots=snaps, loss_history=loss, loss2_history=loss2, x_np=x_np,
+        y_np=y_np, pred_color=PRED_COLOR, loss_color=LOSS_COLOR, loss2_color=LOSS2_COLOR, file_type=FILE_TYPE,
+        savepath=SAVE, )
     
     if SHOW:
-        for fig, _ in figs:
-            fig.set_size_inches(7, 5)
+        fig.set_size_inches(7, 5)
         plt.show()

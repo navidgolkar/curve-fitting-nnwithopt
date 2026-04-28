@@ -113,10 +113,10 @@ class ModelParams:
     _is_resnet : bool
         ``True`` when the model has residual / skip connections.
 
-    Training
+    Training:
     ~~~~~~~~
     learning_rate : float
-        Adam optimiser learning rate.  Must be > 0.
+        Adam optimizer learning rate.  Must be > 0.
     gradient_clip : float | None
         Max-norm for ``torch.nn.utils.clip_grad_norm_``.  ``None`` disables.
         When set, must be > 0.
@@ -136,7 +136,7 @@ class ModelParams:
         ``len(layer_sizes) - 1``.  Use ``nn.Identity()`` for a linear (no-op).
     seed : int | None
         Global random seed applied to ``random``, ``numpy``, ``torch``, and
-        ``torch.cuda`` before weight initialisation and before each training
+        ``torch.cuda`` before weight initialization and before each training
         run.  ``None`` disables deterministic seeding.  When set must be a
         non-negative integer.
     shuffle : bool
@@ -197,6 +197,10 @@ class ModelParams:
     def title(self) -> str:
         width = max(self.layer_sizes) if self.layer_sizes else 0
         return f"{self.name} | Seed = {self.seed} | {len(self.layer_sizes)-2} Hidden Layers x {width} Nodes"
+    
+    @property
+    def connections(self):
+        return self._connections
 
 
 # -----------------------------------------------------------------------------
